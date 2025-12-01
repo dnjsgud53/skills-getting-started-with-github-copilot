@@ -20,14 +20,81 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const spotsLeft = details.max_participants - details.participants.length;
 
+        // Participants section (bulleted list)
+        let participantsHTML = "";
+        if (details.participants && details.participants.length > 0) {
+          participantsHTML = `
+            <div class="participants-section">
+              <strong>Participants:</strong>
+              <ul class="participants-list">
+                ${details.participants.map(email => `
+                  <li style="list-style-type:none;display:flex;align-items:center;gap:6px;">
+                    <span class="participant-email">${email}</span>
+                    <button class="delete-participant-btn" title="Remove participant" data-activity="${encodeURIComponent(name)}" data-email="${encodeURIComponent(email)}" style="background:none;border:none;cursor:pointer;padding:2px;">
+                      <span style="color:#c62828;font-size:16px;">&#128465;</span>
+                    </button>
+                  </li>
+                `).join("")}
+              </ul>
+            </div>
+          `;
+        } else {
+          participantsHTML = `
+            <div class="participants-section empty">
+              <strong>Participants:</strong>
+              <span class="no-participants">No one has signed up yet.</span>
+            </div>
+          `;
+        }
+
         activityCard.innerHTML = `
           <h4>${name}</h4>
           <p>${details.description}</p>
           <p><strong>Schedule:</strong> ${details.schedule}</p>
           <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
+          ${participantsHTML}
         `;
 
         activitiesList.appendChild(activityCard);
+
+        // 삭제 아이콘 이벤트 리스너 등록 (동적으로 생성된 버튼)
+        const deleteBtns = activityCard.querySelectorAll('.delete-participant-btn');
+        deleteBtns.forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const activityName = decodeURIComponent(btn.getAttribute('data-activity'));
+            const email = decodeURIComponent(btn.getAttribute('data-email'));
+            if (!confirm(`Remove ${email} from ${activityName}?`)) return;
+            try {
+              const response = await fetch(`/activities/${encodeURIComponent(activityName)}/unregister?email=${encodeURIComponent(email)}`, {
+                method: 'POST',
+              });
+              const result = await response.json();
+              if (response.ok) {
+                messageDiv.textContent = result.message || 'Participant removed.';
+                messageDiv.className = 'success';
+                messageDiv.classList.remove('hidden');
+                fetchActivities(); // Refresh list
+              } else {
+                messageDiv.textContent = result.detail || 'Failed to remove participant.';
+                messageDiv.className = 'error';
+                messageDiv.classList.remove('hidden');
+              }
+              setTimeout(() => {
+                messageDiv.classList.add('hidden');
+              }, 5000);
+            } catch (error) {
+              messageDiv.textContent = 'Error removing participant.';
+              messageDiv.className = 'error';
+              messageDiv.classList.remove('hidden');
+              setTimeout(() => {
+                messageDiv.classList.add('hidden');
+              }, 5000);
+              console.error('Error removing participant:', error);
+            }
+          });
+        });
 
         // Add option to select dropdown
         const option = document.createElement("option");
@@ -62,6 +129,7 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        fetchActivities(); // 등록 후 활동 목록 새로고침
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
